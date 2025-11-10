@@ -9,7 +9,7 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { preprocess } from './apps/preprocess/preprocess.js';
 import { GVRM, GVRMUtils } from './gvrm-format/gvrm.js';
 import { FPSCounter } from './apps/fps.js';
-// import { setupVR } from './apps/vr.js';
+import { setupVR } from './apps/vr.js';
 
 
 // UI
@@ -241,7 +241,6 @@ const gvrmFiles = [
 
 const fbxFiles = [
   './assets/Idle.fbx',
-  './assets/Acknowledging.fbx',
   './assets/Around.fbx',
   './assets/Breathing.fbx',
   './assets/Chicken Dance.fbx',
@@ -296,10 +295,6 @@ function updateStatusList() {
 
 const fpsc = new FPSCounter();
 
-// if (useVR) {
-//   vrControllers = setupVR(renderer, container, scene, gvrm, gvrmFiles, fbxFiles, camera, fileName);
-// }
-
 // Mobile detection and UI setup
 // Check User-Agent for mobile devices
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -347,8 +342,10 @@ document.getElementById('home-button').addEventListener('click', function() {
 
 // VR button handler
 document.getElementById('vr-button').addEventListener('click', function() {
-  // Enable WebXR
-  renderer.xr.enabled = true;
+  // Setup VR with controller and interactive panels
+  if (!vrControllers && gvrm) {
+    vrControllers = setupVR(renderer, container, scene, gvrm, gvrmFiles, fbxFiles, camera, fileName);
+  }
 
   // Adjust character position for VR (avatar belly is at origin)
   // Move character to height 0.8 and 1m away from origin
@@ -357,7 +354,7 @@ document.getElementById('vr-button').addEventListener('click', function() {
     gvrm.character.currentVrm.scene.position.z = -0.5;
   }
 
-  // Create and click the VR button
+  // Create and click the VR button to start session
   const vrButton = VRButton.createButton(renderer);
   vrButton.click();
 });
@@ -555,6 +552,11 @@ function animate() {
 
   controls.update();
   controls2.update();
+
+  // Update VR controller debug info
+  if (vrControllers) {
+    vrControllers.update();
+  }
 
   renderer.render(scene, camera);
 
