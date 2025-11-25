@@ -382,17 +382,25 @@
         }
       }
 
+      // Calculate camera-relative direction (horizontal plane only)
+      const cameraDirection = new THREE.Vector3();
+      camera.getWorldDirection(cameraDirection);
+      cameraDirection.y = 0;
+      cameraDirection.normalize();
+      const cameraAngle = Math.atan2(cameraDirection.x, cameraDirection.z) + Math.PI;
+
       // Gamepad movement (takes priority if magnitude > 0)
       if (input.magnitude > 0) {
-        // Calculate target angle from joystick input
-        const targetAngle = Math.atan2(input.x, input.y);
+        // Calculate target angle from joystick input, relative to camera
+        const inputAngle = Math.atan2(input.x, input.y);
+        const worldAngle = inputAngle + cameraAngle;
 
         // Set character rotation to face the target direction
-        character.rotation.y = targetAngle + rot0.y;
+        character.rotation.y = worldAngle + rot0.y;
 
         // Move forward at constant speed (or boosted speed)
-        character.position.x += currentSpeed * Math.sin(targetAngle);
-        character.position.z += currentSpeed * Math.cos(targetAngle);
+        character.position.x += currentSpeed * Math.sin(worldAngle);
+        character.position.z += currentSpeed * Math.cos(worldAngle);
       } else {
         // Keyboard controls (only active when gamepad not in use)
         // Rotation: A (left) / D (right)
@@ -403,15 +411,16 @@
           character.rotation.y -= currentRotationSpeed;
         }
 
-        // Movement: W (forward) / S (backward)
-        const angle = character.rotation.y - rot0.y;
+        // Movement: W (forward) / S (backward) - relative to camera
         if (keys['w']) {
-          character.position.x += currentSpeed * Math.sin(angle);
-          character.position.z += currentSpeed * Math.cos(angle);
+          character.rotation.y = cameraAngle + rot0.y;
+          character.position.x += currentSpeed * Math.sin(cameraAngle);
+          character.position.z += currentSpeed * Math.cos(cameraAngle);
         }
         if (keys['s']) {
-          character.position.x -= currentSpeed * Math.sin(angle);
-          character.position.z -= currentSpeed * Math.cos(angle);
+          character.rotation.y = cameraAngle + Math.PI + rot0.y;
+          character.position.x -= currentSpeed * Math.sin(cameraAngle);
+          character.position.z -= currentSpeed * Math.cos(cameraAngle);
         }
 
         // Jump with Space key
