@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<head>
+  <title>GVRM Walker - Controller + Keyboard + Zoom</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #222;
+    }
+    #canvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: monospace;
+      font-size: 14px;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+    #commands {
+      position: absolute;
+      top: 40px;
+      left: 10px;
+      color: white;
+      font-family: monospace;
+      font-size: 12px;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="info">
+    Controller: Not connected
+  </div>
+  <div id="commands">
+    Commands<br>
+    Keyboard: `WASD` to move, `Arrow keys` for actions, `Shift` to dash, `Space` to jump<br>
+    Controller: `Left stick` to move, `&#9675;&#10005;&#9651;&#9633;` for actions<br>
+    Recorder&#128308;: `R` to start/stop recording
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+        "gaussian-splats-3d": "https://naruya.github.io/gs-edit/lib/gaussian-splats-3d.module.js",
+        "jszip": "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm",
+        "gvrm": "https://naruya.github.io/gs-edit/lib/gaussian-vrm.min.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GVRM } from 'gvrm';
+    import { Recorder } from '../apps/recorder.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const canvas = document.getElementById('canvas');
+    const infoDiv = document.getElementById('info');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    const scene = new THREE.Scene();
+
+    const axesHelper = new THREE.AxesHelper(1);
+    scene.add(axesHelper);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera.position.set(2.4, 2.4, 4);
+    camera.lookAt(0, 1, 0);
+
+    // Camera controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1, 0);  // Look at character center
+    controls.enablePan = false;  // Disable panning
+    controls.enableZoom = false;  // Disable OrbitControls zoom (we use custom wheel zoom)
+    controls.update();
+
+    // GVRM
+    let gvrm = await GVRM.load('./assets/sample8.gvrm', scene, camera, renderer);
+    let character = gvrm.character.currentVrm.scene;
+    character.position.set(0, 0, 0);
+
+    // Load Walking animation
+    await gvrm.changeFBX('./assets/Walking.fbx');
+    gvrm.character.action.play();
+
+    // Set animation transition duration
+    gvrm.character.transitionDuration = 0.2;
+
+    // Recorder
+    const recorder = new Recorder(scene, camera, renderer);
+    recorder.setGVRM(gvrm);
+
+    const speed = 0.02;
+    const speedBoost = 4.0;
+    const rotationSpeed = 0.05;
+
+    // Animation state
+    let currentAnimation = 'walking';  // 'walking' or 'running'
+
+    // Get default rotation
+    let rot0 = character.rotation0.clone();
+
+    // Jump physics
+    let velocityY = 0;
+    let isJumping = false;
+    const gravity = -0.008;
+    const jumpPower = 0.10;
+    const groundY = 0;
+
+    // Gamepad state
+    let gamepad = null;
+    let gamepadConnected = false;
+    let previousSquareButton = false;
+    let previousTriangleButton = false;
+    let previousCircleButton = false;
+
+    // Keyboard state
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+    });
+    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+    // Mouse wheel zoom
+    const minDistance = 1.0;
+    const maxDistance = 20.0;
+
+    window.addEventListener('wheel', (e) => {
+      e.preventDefault();
+
+      // Get current distance from target
+      const currentDistance = camera.position.distanceTo(controls.target);
+
+      // Calculate new distance
+      const zoomSpeed = 0.1;
+      let newDistance = currentDistance + e.deltaY * zoomSpeed * 0.01;
+      newDistance = Math.max(minDistance, Math.min(maxDistance, newDistance));
+
+      // Update camera position maintaining direction
+      const direction = new THREE.Vector3();
+      direction.subVectors(camera.position, controls.target).normalize();
+      camera.position.copy(controls.target).add(direction.multiplyScalar(newDistance));
+
+      controls.update();
+    }, { passive: false });
+
+    // Gamepad connection detection
+    window.addEventListener('gamepadconnected', (e) => {
+      gamepad = e.gamepad;
+      gamepadConnected = true;
+      updateInfo();
+    });
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+      gamepad = null;
+      gamepadConnected = false;
+      updateInfo();
+    });
+
+    function updateInfo() {
+      const controllerText = gamepadConnected
+        ? `Controller: ${gamepad.id}`
+        : 'Controller: Not connected';
+      infoDiv.innerHTML = controllerText;
+    }
+
+    // Window resize handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Drag and drop handler for GVRM files
+    window.addEventListener('dragover', (event) => {
+      event.preventDefault();
+    });
+
+    window.addEventListener('drop', async (event) => {
+      event.preventDefault();
+
+      const files = event.dataTransfer.files;
+      if (!files) return;
+
+      const file = files[0];
+      if (!file) return;
+
+      const fileType = file.name.split('.').pop();
+
+      if (fileType === 'gvrm') {
+        const blob = new Blob([file], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+
+        // Remove old GVRM
+        await gvrm.remove(scene);
+
+        // Load new GVRM
+        gvrm = await GVRM.load(url, scene, camera, renderer);
+        character = gvrm.character.currentVrm.scene;
+        character.position.set(0, 0, 0);
+
+        // Update recorder
+        recorder.setGVRM(gvrm);
+
+        // Update default rotation
+        rot0 = character.rotation0.clone();
+
+        // Reset jump state
+        velocityY = 0;
+        isJumping = false;
+
+        // Load Walking animation
+        await gvrm.changeFBX('./assets/Walking.fbx');
+        gvrm.character.action.play();
+
+        infoDiv.innerHTML = `GVRM loaded: ${file.name}<br>` + infoDiv.innerHTML.split('<br>').slice(1).join('<br>');
+      }
+    });
+
+    // Get gamepad input with deadzone
+    function getGamepadInput() {
+      if (!gamepadConnected) return { x: 0, y: 0, magnitude: 0, crossButton: false, squareButton: false, triangleButton: false, circleButton: false };
+
+      // Need to call navigator.getGamepads() each frame to get updated state
+      const gamepads = navigator.getGamepads();
+      gamepad = gamepads[gamepad.index];
+
+      if (!gamepad) return { x: 0, y: 0, magnitude: 0, crossButton: false, squareButton: false, triangleButton: false, circleButton: false };
+
+      const deadzone = 0.15;
+      let x = gamepad.axes[0] || 0;  // Left stick horizontal
+      let y = gamepad.axes[1] || 0;  // Left stick vertical
+
+      // Calculate magnitude
+      const magnitude = Math.sqrt(x * x + y * y);
+
+      // Apply deadzone
+      if (magnitude < deadzone) {
+        x = 0;
+        y = 0;
+      }
+
+      // Buttons: 0 = Cross (×), 1 = Circle (○), 2 = Triangle (△), 3 = Square (□)
+      const crossButton = gamepad.buttons[0]?.pressed || false;
+      const circleButton = gamepad.buttons[1]?.pressed || false;
+      const squareButton = gamepad.buttons[3]?.pressed || false;
+      const triangleButton = gamepad.buttons[2]?.pressed || false;
+
+      return { x, y, magnitude: magnitude < deadzone ? 0 : magnitude, crossButton, circleButton, squareButton, triangleButton };
+    }
+
+    renderer.setAnimationLoop(async () => {
+      gvrm.update();
+      controls.update();
+
+      const input = getGamepadInput();
+
+      // Jump (□ button or ArrowUp key) - trigger on button press (not hold)
+      if ((input.squareButton && !previousSquareButton && !isJumping) || (keys['arrowup'] && !isJumping)) {
+        velocityY = jumpPower;
+        isJumping = true;
+      }
+      previousSquareButton = input.squareButton;
+
+      // Chicken Dance (△ button or ArrowLeft key) - trigger on button press (not hold)
+      if ((input.triangleButton && !previousTriangleButton) || keys['arrowleft']) {
+        currentAnimation = 'dance';
+        await gvrm.changeFBX('./assets/Chicken Dance.fbx');
+        gvrm.character.action.play();
+        keys['arrowleft'] = false; // Prevent continuous triggering
+      }
+      previousTriangleButton = input.triangleButton;
+
+      // Jab Cross (○ button or ArrowRight key) - trigger on button press (not hold)
+      if ((input.circleButton && !previousCircleButton) || keys['arrowright']) {
+        currentAnimation = 'jabcross';
+        await gvrm.changeFBX('./assets/Jab Cross.fbx');
+        gvrm.character.action.setEffectiveTimeScale(1.3);
+        gvrm.character.action.play();
+        keys['arrowright'] = false; // Prevent continuous triggering
+      }
+      previousCircleButton = input.circleButton;
+
+      // Apply jump physics
+      if (isJumping || character.position.y > groundY) {
+        velocityY += gravity;
+        character.position.y += velocityY;
+
+        // Land on ground
+        if (character.position.y <= groundY) {
+          character.position.y = groundY;
+          velocityY = 0;
+          isJumping = false;
+        }
+      }
+
+      // Check if moving or rotating
+      const isMovingGamepad = input.magnitude > 0;
+      const isMovingKeyboard = keys['w'] || keys['s'];
+      const isRotating = keys['a'] || keys['d'];
+      const isMovingOrRotating = isMovingGamepad || isMovingKeyboard || isRotating;
+
+      // Exit dance/jabcross mode if moving or rotating
+      if ((currentAnimation === 'dance' || currentAnimation === 'jabcross') && isMovingOrRotating) {
+        currentAnimation = 'walking';
+        await gvrm.changeFBX('./assets/Walking.fbx');
+        gvrm.character.action.setEffectiveTimeScale(1.0);
+        gvrm.character.action.play();
+      }
+
+      // Speed boost (× button or Shift key or ArrowDown key)
+      const isBoosting = input.crossButton || keys['shift'] || keys['arrowdown'];
+      const currentSpeed = isBoosting ? speed * speedBoost : speed;
+      const currentRotationSpeed = isBoosting ? rotationSpeed * speedBoost : rotationSpeed;
+
+      // Switch animation based on speed (only if not in dance/jabcross mode)
+      if (currentAnimation !== 'dance' && currentAnimation !== 'jabcross') {
+        if (isBoosting && currentAnimation === 'walking') {
+          currentAnimation = 'running';
+          await gvrm.changeFBX('./assets/Running.fbx');
+          gvrm.character.action.setEffectiveTimeScale(1.0);
+          gvrm.character.action.play();
+        } else if (!isBoosting && currentAnimation === 'running') {
+          currentAnimation = 'walking';
+          await gvrm.changeFBX('./assets/Walking.fbx');
+          gvrm.character.action.setEffectiveTimeScale(1.0);
+          gvrm.character.action.play();
+        }
+      }
+
+      // Gamepad movement (takes priority if magnitude > 0)
+      if (input.magnitude > 0) {
+        // Calculate target angle from joystick input
+        const targetAngle = Math.atan2(input.x, input.y);
+
+        // Set character rotation to face the target direction
+        character.rotation.y = targetAngle + rot0.y;
+
+        // Move forward at constant speed (or boosted speed)
+        character.position.x += currentSpeed * Math.sin(targetAngle);
+        character.position.z += currentSpeed * Math.cos(targetAngle);
+      } else {
+        // Keyboard controls (only active when gamepad not in use)
+        // Rotation: A (left) / D (right)
+        if (keys['a']) {
+          character.rotation.y += currentRotationSpeed;
+        }
+        if (keys['d']) {
+          character.rotation.y -= currentRotationSpeed;
+        }
+
+        // Movement: W (forward) / S (backward)
+        const angle = character.rotation.y - rot0.y;
+        if (keys['w']) {
+          character.position.x += currentSpeed * Math.sin(angle);
+          character.position.z += currentSpeed * Math.cos(angle);
+        }
+        if (keys['s']) {
+          character.position.x -= currentSpeed * Math.sin(angle);
+          character.position.z -= currentSpeed * Math.cos(angle);
+        }
+
+        // Jump with Space key
+        if (keys[' '] && !isJumping) {
+          velocityY = jumpPower;
+          isJumping = true;
+        }
+      }
+
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>

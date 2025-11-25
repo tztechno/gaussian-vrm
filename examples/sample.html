@@ -22,14 +22,14 @@
       background-color: rgba(0, 0, 0, 0.7);
       padding: 10px;
       border-radius: 5px;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
   <div id="info">
-    Controller: Not connected<br>
-    Press any button on your PS4/Xbox controller
+    Controller: Not connected
   </div>
 
   <script type="importmap">
@@ -95,14 +95,14 @@
     window.addEventListener('gamepadconnected', (e) => {
       gamepad = e.gamepad;
       gamepadConnected = true;
-      infoDiv.innerHTML = `Controller: ${gamepad.id}<br>Left stick: Move | ○: Jump | ×: Speed boost`;
+      infoDiv.innerHTML = `Controller: ${gamepad.id}`;
       console.log('Gamepad connected:', gamepad.id);
     });
 
     window.addEventListener('gamepaddisconnected', (e) => {
       gamepad = null;
       gamepadConnected = false;
-      infoDiv.innerHTML = 'Controller: Not connected<br>Press any button on your PS4/Xbox controller';
+      infoDiv.innerHTML = 'Controller: Not connected';
       console.log('Gamepad disconnected');
     });
 
