@@ -68,6 +68,7 @@
     import { GVRM } from 'gvrm';
     import { Recorder } from '../apps/recorder.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { VirtualController } from '../apps/virtualController.js';
 
     const canvas = document.getElementById('canvas');
     const infoDiv = document.getElementById('info');
@@ -106,6 +107,9 @@
     // Recorder
     const recorder = new Recorder(scene, camera, renderer);
     recorder.setGVRM(gvrm);
+
+    // Virtual Controller for mobile
+    const virtualController = new VirtualController();
 
     const speed = 0.02;
     const speedBoost = 4.0;
@@ -236,6 +240,11 @@
 
     // Get gamepad input with deadzone
     function getGamepadInput() {
+      // Check virtual controller first (if enabled)
+      if (virtualController.enabled) {
+        return virtualController.getInput();
+      }
+
       if (!gamepadConnected) return { x: 0, y: 0, magnitude: 0, crossButton: false, squareButton: false, triangleButton: false, circleButton: false };
 
       // Need to call navigator.getGamepads() each frame to get updated state
@@ -382,6 +391,11 @@
           velocityY = jumpPower;
           isJumping = true;
         }
+      }
+
+      // Update virtual controller previous state for edge detection
+      if (virtualController.enabled) {
+        virtualController.updatePreviousState();
       }
 
       renderer.render(scene, camera);
