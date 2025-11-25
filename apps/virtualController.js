@@ -259,8 +259,9 @@ export class VirtualController {
     this.joystickArea.addEventListener('touchcancel', (e) => this._onJoystickEnd(e));
 
     // Button touch events
-    this._setupButtonEvents(this.triangleBtn, 'triangle');
-    this._setupButtonEvents(this.squareBtn, 'square');
+    // Note: triangle and square are swapped to match gamepad behavior
+    this._setupButtonEvents(this.triangleBtn, 'square');
+    this._setupButtonEvents(this.squareBtn, 'triangle');
     this._setupButtonEvents(this.circleBtn, 'circle');
     this._setupButtonEvents(this.crossBtn, 'cross');
   }
