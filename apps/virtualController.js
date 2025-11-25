@@ -191,8 +191,31 @@ export class VirtualController {
     this.buttonsArea.appendChild(this.circleBtn);
     this.buttonsArea.appendChild(this.crossBtn);
 
+    // Create PC button to exit mobile mode (centered at bottom)
+    this.pcButton = document.createElement('button');
+    this.pcButton.id = 'pc-mode-button';
+    this.pcButton.textContent = 'PC';
+    this.pcButton.style.cssText = `
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: normal;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid white;
+      border-radius: 8px;
+      cursor: pointer;
+      pointer-events: auto;
+      font-family: sans-serif;
+    `;
+    this.pcButton.addEventListener('click', () => this.disable());
+
     this.container.appendChild(this.joystickArea);
     this.container.appendChild(this.buttonsArea);
+    this.container.appendChild(this.pcButton);
     document.body.appendChild(this.container);
   }
 
