@@ -36,6 +36,17 @@
       border-radius: 5px;
       line-height: 1.5;
     }
+    #fpsdisplay {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: white;
+      font-family: monospace;
+      font-size: 14px;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
@@ -49,6 +60,7 @@
     Controller: `Left stick` to move, `&#9675;&#10005;&#9651;&#9633;` for actions<br>
     Recorder&#128308;: `R` to start/stop recording
   </div>
+  <div id="fpsdisplay">--</div>
 
   <script type="importmap">
     {
@@ -69,6 +81,7 @@
     import { Recorder } from '../apps/recorder.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { VirtualController } from '../apps/virtualController.js';
+    import { FPSCounter } from '../apps/fps.js';
 
     const canvas = document.getElementById('canvas');
     const infoDiv = document.getElementById('info');
@@ -110,6 +123,9 @@
 
     // Virtual Controller for mobile
     const virtualController = new VirtualController();
+
+    // FPS Counter
+    const fpsc = new FPSCounter();
 
     const speed = 0.02;
     const speedBoost = 4.0;
@@ -399,6 +415,7 @@
       }
 
       renderer.render(scene, camera);
+      fpsc.update();
     });
   </script>
 </body>
